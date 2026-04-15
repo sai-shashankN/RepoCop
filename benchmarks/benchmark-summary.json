@@ -1,0 +1,33 @@
+{
+  "generated_at": "2026-04-15T08:45:50.338Z",
+  "benchmark_targets": [
+    {
+      "slug": "openai-openai-node",
+      "repo": "openai/openai-node",
+      "description": "Modern SDK repo with TypeScript-heavy API surface.",
+      "status": "blocked",
+      "analysis_duration_ms": null,
+      "review_duration_ms": null,
+      "sampled_file_count": 0,
+      "limited_coverage": true,
+      "risk": null,
+      "summary": "",
+      "error": "Get repository metadata (anonymous retry) failed after 3 attempt(s). Get repository metadata (anonymous retry) failed after 3 attempt(s). Status=403. API rate limit exceeded for 128.185.168.220. (But here's the good news: Authenticated requests get a higher rate limit. Check out the documentation for more details.)",
+      "artifact_path": "benchmarks/openai-openai-node.json"
+    },
+    {
+      "slug": "fastapi-fastapi",
+      "repo": "fastapi/fastapi",
+      "description": "Python framework repo with docs and server-side patterns.",
+      "status": "blocked",
+      "analysis_duration_ms": null,
+      "review_duration_ms": null,
+      "sampled_file_count": 0,
+      "limited_coverage": true,
+      "risk": null,
+      "summary": "",
+      "error": "Get repository metadata (anonymous retry) failed after 3 attempt(s). Get repository metadata (anonymous retry) failed after 3 attempt(s). Status=403. API rate limit exceeded for 128.185.168.220. (But here's the good news: Authenticated requests get a higher rate limit. Check out the documentation for more details.)",
+      "artifact_path": "benchmarks/fastapi-fastapi.json"
+    }
+  ]
+}

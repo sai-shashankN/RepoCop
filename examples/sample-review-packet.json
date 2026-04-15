@@ -1,0 +1,38 @@
+{
+  "generated_at": "2026-04-15T08:45:50.338Z",
+  "sample_type": "illustrative_schema_example",
+  "source_repo": "owner/example-repo",
+  "analysis_type": "repo",
+  "model": "gpt-4.1-mini",
+  "packet": {
+    "summary": "The repository has a clear service entry point and reasonable docs coverage, but the current sample suggests limited automated validation around critical paths and webhook/error handling.",
+    "risk": "medium",
+    "risk_reasoning": [
+      "The visible surface appears small enough to understand, but confidence is capped when only a subset of files is sampled.",
+      "Operational paths depend on external services, which raises runtime risk if retries and observability are thin."
+    ],
+    "architecture_observations": [
+      "Core review logic is centralized, which is good for consistency but can create a large single-file change surface.",
+      "Coverage-aware output is a strength because the reviewer can communicate what was and was not inspected."
+    ],
+    "code_quality_findings": [
+      "Add testable wrappers around network-bound logic so benchmark and review flows can be exercised without live dependencies.",
+      "Promote reusable analysis helpers into explicit exports so scripts and future tests can share the same logic."
+    ],
+    "security_findings": [
+      "Credential and webhook configuration should stay out of committed files and should be validated at startup."
+    ],
+    "test_coverage_gaps": [
+      "Missing regression coverage for benchmark/export helper scripts.",
+      "No visible contract tests for review-packet schema stability."
+    ],
+    "recommended_next_steps": [
+      "Add a small test suite for analysis helper functions and benchmark scripts.",
+      "Store one or two review artifacts from known repositories so reviewers can inspect concrete output quickly."
+    ],
+    "questions_for_maintainer": [
+      "Which repositories should be the canonical benchmark targets once GitHub credentials are refreshed?",
+      "Do you want benchmark runs to fail hard on missing credentials, or degrade to a documented blocked state?"
+    ]
+  }
+}

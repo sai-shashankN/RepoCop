@@ -1,0 +1,384 @@
+{
+    "updatedAt":  "2026-03-02T02:39:56.869Z",
+    "createdAt":  "2026-03-02T01:43:37.351Z",
+    "id":  "DJXtUlHws7xs3tOA",
+    "name":  "Repository Summarizer + Auto-Reviewer Bot",
+    "description":  null,
+    "active":  true,
+    "isArchived":  false,
+    "nodes":  [
+                  {
+                      "id":  "node-webhook-auto",
+                      "name":  "Webhook Auto",
+                      "type":  "n8n-nodes-base.webhook",
+                      "typeVersion":  2.1,
+                      "position":  [
+                                       -860,
+                                       -220
+                                   ],
+                      "parameters":  {
+                                         "httpMethod":  "POST",
+                                         "path":  "github-repo-review-auto",
+                                         "responseMode":  "onReceived",
+                                         "options":  {
+
+                                                     }
+                                     },
+                      "onError":  "continueRegularOutput",
+                      "webhookId":  "repo-review-auto"
+                  },
+                  {
+                      "id":  "node-webhook-manual",
+                      "name":  "Webhook Manual",
+                      "type":  "n8n-nodes-base.webhook",
+                      "typeVersion":  2.1,
+                      "position":  [
+                                       -860,
+                                       20
+                                   ],
+                      "parameters":  {
+                                         "httpMethod":  "POST",
+                                         "path":  "github-repo-review-manual",
+                                         "responseMode":  "onReceived",
+                                         "options":  {
+
+                                                     }
+                                     },
+                      "onError":  "continueRegularOutput",
+                      "webhookId":  "repo-review-manual"
+                  },
+                  {
+                      "id":  "node-normalize-input",
+                      "name":  "Normalize Input",
+                      "type":  "n8n-nodes-base.code",
+                      "typeVersion":  2,
+                      "position":  [
+                                       -580,
+                                       -100
+                                   ],
+                      "parameters":  {
+                                         "language":  "javaScript",
+                                         "mode":  "runOnceForAllItems",
+                                         "jsCode":  "const inputItems = $input.all();\nconst outputs = [];\n\nfor (const item of inputItems) {\n  const body = item.json.body ?? item.json;\n  const headers = item.json.headers ?? {};\n  const receivedAt = new Date().toISOString();\n\n  const githubEvent = String(headers[\u0027x-github-event\u0027] || headers[\u0027X-GitHub-Event\u0027] || \u0027\u0027).toLowerCase();\n\n  if (body \u0026\u0026 body.repository \u0026\u0026 (githubEvent || body.ref || body.action || body.zen)) {\n    const owner = body.repository?.owner?.login || body.repository?.owner?.name || \u0027\u0027;\n    const repo = body.repository?.name || \u0027\u0027;\n\n    const eventAction = githubEvent || (body.action ? String(body.action).toLowerCase() : (body.ref ? \u0027push\u0027 : \u0027repository_event\u0027));\n    const allowedEvents = [\u0027push\u0027, \u0027repository_dispatch\u0027, \u0027workflow_dispatch\u0027];\n    const ref = String(body.ref || body.repository?.default_branch || \u0027\u0027).replace(/^refs\\/heads\\//, \u0027\u0027);\n\n    outputs.push({\n      json: {\n        skip: !owner || !repo || !allowedEvents.includes(eventAction),\n        skip_reason: (!owner || !repo)\n          ? \u0027Repository owner/name missing in webhook payload.\u0027\n          : (allowedEvents.includes(eventAction)\n              ? \u0027\u0027\n              : `Ignoring repository event: ${eventAction || \u0027unknown\u0027}. Supported: push, repository_dispatch, workflow_dispatch.`),\n        trigger_mode: \u0027automatic\u0027,\n        event_action: eventAction || \u0027unknown\u0027,\n        owner,\n        repo,\n        ref,\n        repo_identifier: owner \u0026\u0026 repo ? `${owner}/${repo}` : \u0027unknown\u0027,\n        received_at: receivedAt,\n      },\n    });\n    continue;\n  }\n\n  const repoUrl = body?.repo_url || body?.repository_url || body?.url || body?.repoUrl || body?.repositoryUrl || \u0027\u0027;\n  const match = typeof repoUrl === \u0027string\u0027\n    ? repoUrl.match(/^https?:\\/\\/github\\.com\\/([^\\/]+)\\/([^\\/#?]+)(?:[\\/#?].*)?$/i)\n    : null;\n\n  if (!match) {\n    outputs.push({\n      json: {\n        skip: true,\n        skip_reason: \u0027Manual mode requires a valid GitHub repository URL in body.repo_url, e.g. https://github.com/owner/repo\u0027,\n        trigger_mode: \u0027manual\u0027,\n        event_action: \u0027manual_request\u0027,\n        owner: \u0027\u0027,\n        repo: \u0027\u0027,\n        ref: \u0027\u0027,\n        repo_identifier: \u0027unknown\u0027,\n        received_at: receivedAt,\n      },\n    });\n    continue;\n  }\n\n  const owner = match[1];\n  const repo = match[2].replace(/\\.git$/i, \u0027\u0027);\n  const ref = String(body?.ref || body?.branch || \u0027\u0027).replace(/^refs\\/heads\\//, \u0027\u0027);\n\n  outputs.push({\n    json: {\n      skip: false,\n      skip_reason: \u0027\u0027,\n      trigger_mode: \u0027manual\u0027,\n      event_action: \u0027manual_request\u0027,\n      owner,\n      repo,\n      ref,\n      repo_identifier: `${owner}/${repo}`,\n      received_at: receivedAt,\n    },\n  });\n}\n\nreturn outputs;"
+                                     }
+                  },
+                  {
+                      "id":  "node-should-process",
+                      "name":  "Should Process Event",
+                      "type":  "n8n-nodes-base.if",
+                      "typeVersion":  2.3,
+                      "position":  [
+                                       -300,
+                                       -100
+                                   ],
+                      "parameters":  {
+                                         "conditions":  {
+                                                            "options":  {
+                                                                            "version":  2,
+                                                                            "leftValue":  "",
+                                                                            "caseSensitive":  true,
+                                                                            "typeValidation":  "strict"
+                                                                        },
+                                                            "combinator":  "and",
+                                                            "conditions":  [
+                                                                               {
+                                                                                   "id":  "condition-process-event",
+                                                                                   "operator":  {
+                                                                                                    "type":  "boolean",
+                                                                                                    "operation":  "true",
+                                                                                                    "singleValue":  true
+                                                                                                },
+                                                                                   "leftValue":  "={{ !$json.skip }}",
+                                                                                   "rightValue":  ""
+                                                                               }
+                                                                           ]
+                                                        },
+                                         "options":  {
+
+                                                     }
+                                     },
+                      "onError":  "continueErrorOutput"
+                  },
+                  {
+                      "id":  "node-review-notify",
+                      "name":  "PR Review + Notify",
+                      "type":  "n8n-nodes-base.code",
+                      "typeVersion":  2,
+                      "position":  [
+                                       -20,
+                                       -220
+                                   ],
+                      "retryOnFail":  true,
+                      "maxTries":  2,
+                      "waitBetweenTries":  2000,
+                      "parameters":  {
+                                         "language":  "javaScript",
+                                         "mode":  "runOnceForAllItems",
+                                         "jsCode":  "const input = $input.first().json;\nconst env = (typeof $env !== \u0027undefined\u0027 \u0026\u0026 $env) ? $env : (process.env || {});\nconst staticData = $getWorkflowStaticData(\u0027global\u0027);\nif (!staticData.lastReviewedByRepo || typeof staticData.lastReviewedByRepo !== \u0027object\u0027) staticData.lastReviewedByRepo = {};\nif (!Array.isArray(staticData.auditLog)) staticData.auditLog = [];\n\nconst nowIso = () =\u003e new Date().toISOString();\nlet repoIdentifier = input.repo_identifier || \u0027unknown\u0027;\nlet commitSha = \u0027unknown\u0027;\n\nconst clean = (v) =\u003e (typeof v === \u0027string\u0027 ? v.replace(/\\s+/g, \u0027 \u0027).trim() : \u0027\u0027);\nconst asList = (arr, maxItems = 8, maxLen = 220) =\u003e (Array.isArray(arr) ? arr : [])\n  .map(clean)\n  .filter(Boolean)\n  .slice(0, maxItems)\n  .map((v) =\u003e (v.length \u003e maxLen ? `${v.slice(0, maxLen - 3)}...` : v));\nconst ensureRisk = (r) =\u003e {\n  const x = clean(r).toLowerCase();\n  return x === \u0027low\u0027 || x === \u0027medium\u0027 || x === \u0027high\u0027 ? x : \u0027medium\u0027;\n};\nconst addUnique = (arr, value) =\u003e {\n  const x = clean(value);\n  if (!x) return;\n  if (!arr.includes(x)) arr.push(x);\n};\nconst audit = (riskLevel, messageLink = \u0027\u0027, note = \u0027\u0027) =\u003e {\n  const entry = {\n    timestamp: nowIso(),\n    repo_identifier: repoIdentifier,\n    commit_sha: commitSha,\n    risk_level: riskLevel,\n    message_link: messageLink || \u0027\u0027,\n  };\n  if (note) entry.note = note;\n  staticData.auditLog.unshift(entry);\n  staticData.auditLog = staticData.auditLog.slice(0, 500);\n  return entry;\n};\nconst wait = async (ms) =\u003e new Promise((resolve) =\u003e setTimeout(resolve, ms));\n\nconst requestWithRetry = async (options, label) =\u003e {\n  const attempts = Math.max(1, Number(env.HTTP_MAX_ATTEMPTS || 3));\n  const baseDelay = Math.max(200, Number(env.HTTP_RETRY_BASE_MS || 1000));\n\n  for (let attempt = 1; attempt \u003c= attempts; attempt++) {\n    try {\n      if (this?.helpers?.httpRequest) {\n        return await this.helpers.httpRequest(options);\n      }\n      throw new Error(\u0027Code node HTTP helper is unavailable in this n8n runtime\u0027);\n    } catch (e) {\n      const status = e?.statusCode || e?.response?.statusCode || e?.response?.status || 0;\n      const msg = e?.response?.body?.message || e?.message || \u0027Unknown request failure\u0027;\n      const retryable = status === 0 || status === 429 || status \u003e= 500 || status === 403;\n      if (!retryable || attempt === attempts) {\n        throw new Error(`${label} failed after ${attempt} attempt(s). Status=${status || \u0027n/a\u0027}. ${msg}`);\n      }\n      await wait(baseDelay * Math.pow(2, attempt - 1));\n    }\n  }\n};\n\nconst encodePath = (p) =\u003e String(p).split(\u0027/\u0027).map((s) =\u003e encodeURIComponent(s)).join(\u0027/\u0027);\nconst decodeBase64 = (v) =\u003e Buffer.from(String(v || \u0027\u0027).replace(/\\n/g, \u0027\u0027), \u0027base64\u0027).toString(\u0027utf8\u0027);\n\ntry {\n  const destination = (clean(env.DESTINATION_MODE) || \u0027discord\u0027).toLowerCase();\n  const githubToken = clean(env.GITHUB_TOKEN);\n  const openaiKey = clean(env.OPENAI_API_KEY);\n  const discordWebhook = clean(env.DISCORD_WEBHOOK_URL);\n  const slackWebhook = clean(env.SLACK_WEBHOOK_URL);\n\n  if (!githubToken) throw new Error(\u0027Missing required env var GITHUB_TOKEN\u0027);\n  if (!openaiKey) throw new Error(\u0027Missing required env var OPENAI_API_KEY\u0027);\n  if (destination === \u0027slack\u0027 \u0026\u0026 !slackWebhook) throw new Error(\u0027DESTINATION_MODE=slack but SLACK_WEBHOOK_URL is missing\u0027);\n  if (destination !== \u0027slack\u0027 \u0026\u0026 !discordWebhook) throw new Error(\u0027DESTINATION_MODE=discord but DISCORD_WEBHOOK_URL is missing\u0027);\n  if (!input.owner || !input.repo) throw new Error(\u0027Normalized payload missing owner/repo\u0027);\n\n  repoIdentifier = `${input.owner}/${input.repo}`;\n  const timeoutMs = Math.max(1000, Number(env.HTTP_TIMEOUT_MS || 30000));\n  const ghHeaders = {\n    Authorization: `Bearer ${githubToken}`,\n    Accept: \u0027application/vnd.github+json\u0027,\n    \u0027X-GitHub-Api-Version\u0027: \u00272022-11-28\u0027,\n    \u0027User-Agent\u0027: \u0027n8n-repo-review-bot\u0027,\n  };\n\n  const repo = await requestWithRetry({\n    method: \u0027GET\u0027,\n    url: `https://api.github.com/repos/${input.owner}/${input.repo}`,\n    headers: ghHeaders,\n    json: true,\n    timeout: timeoutMs,\n  }, \u0027Get repository metadata\u0027);\n\n  const branchInput = clean(input.ref).replace(/^refs\\/heads\\//, \u0027\u0027);\n  const branch = branchInput || clean(repo.default_branch) || \u0027main\u0027;\n\n  const head = await requestWithRetry({\n    method: \u0027GET\u0027,\n    url: `https://api.github.com/repos/${input.owner}/${input.repo}/commits/${encodeURIComponent(branch)}`,\n    headers: ghHeaders,\n    json: true,\n    timeout: timeoutMs,\n  }, \u0027Get branch head commit\u0027);\n\n  commitSha = clean(head?.sha) || \u0027unknown\u0027;\n  const dedupeKey = `${repoIdentifier}@${branch}`;\n  const isAutomatic = input.trigger_mode === \u0027automatic\u0027;\n  if (isAutomatic \u0026\u0026 staticData.lastReviewedByRepo[dedupeKey] \u0026\u0026 commitSha !== \u0027unknown\u0027 \u0026\u0026 staticData.lastReviewedByRepo[dedupeKey] === commitSha) {\n    const entry = audit(\u0027duplicate_skip\u0027, \u0027\u0027, \u0027Same commit already reviewed; skipped to prevent spam.\u0027);\n    return [{ json: { skipped: true, reason: \u0027Duplicate commit SHA, skipped.\u0027, repo_identifier: repoIdentifier, branch, commit_sha: commitSha, audit_entry: entry } }];\n  }\n\n  let languages = {};\n  try {\n    languages = await requestWithRetry({\n      method: \u0027GET\u0027,\n      url: `https://api.github.com/repos/${input.owner}/${input.repo}/languages`,\n      headers: ghHeaders,\n      json: true,\n      timeout: timeoutMs,\n    }, \u0027Get repository languages\u0027);\n  } catch {\n    languages = {};\n  }\n\n  const treeResp = await requestWithRetry({\n    method: \u0027GET\u0027,\n    url: `https://api.github.com/repos/${input.owner}/${input.repo}/git/trees/${encodeURIComponent(branch)}?recursive=1`,\n    headers: ghHeaders,\n    json: true,\n    timeout: timeoutMs,\n  }, \u0027Get repository file tree\u0027);\n\n  const allBlobs = Array.isArray(treeResp?.tree) ? treeResp.tree.filter((n) =\u003e n \u0026\u0026 n.type === \u0027blob\u0027 \u0026\u0026 n.path) : [];\n\n  const excludeRe = [/^\\.git\\//i, /^node_modules\\//i, /^dist\\//i, /^build\\//i, /^coverage\\//i, /^vendor\\//i, /^\\.next\\//i, /^out\\//i, /^target\\//i];\n  const isExcluded = (p) =\u003e excludeRe.some((re) =\u003e re.test(p));\n  const allowedExt = [\u0027.md\u0027,\u0027.txt\u0027,\u0027.js\u0027,\u0027.ts\u0027,\u0027.tsx\u0027,\u0027.jsx\u0027,\u0027.py\u0027,\u0027.java\u0027,\u0027.go\u0027,\u0027.rb\u0027,\u0027.php\u0027,\u0027.cs\u0027,\u0027.json\u0027,\u0027.yml\u0027,\u0027.yaml\u0027,\u0027.toml\u0027,\u0027.ini\u0027,\u0027.env\u0027,\u0027.sql\u0027,\u0027.sh\u0027,\u0027.ps1\u0027,\u0027.gradle\u0027];\n  const specialNames = [\u0027dockerfile\u0027,\u0027makefile\u0027,\u0027readme\u0027,\u0027license\u0027];\n  const hasAllowedType = (p) =\u003e {\n    const lower = String(p).toLowerCase();\n    if (specialNames.some((n) =\u003e lower.endsWith(n))) return true;\n    return allowedExt.some((ext) =\u003e lower.endsWith(ext));\n  };\n\n  const priorityPaths = [\n    \u0027README.md\u0027, \u0027README\u0027, \u0027package.json\u0027, \u0027package-lock.json\u0027, \u0027pnpm-lock.yaml\u0027, \u0027yarn.lock\u0027,\n    \u0027pyproject.toml\u0027, \u0027requirements.txt\u0027, \u0027Pipfile\u0027, \u0027go.mod\u0027, \u0027pom.xml\u0027, \u0027build.gradle\u0027,\n    \u0027Dockerfile\u0027, \u0027docker-compose.yml\u0027, \u0027docker-compose.yaml\u0027, \u0027.github/workflows/ci.yml\u0027,\n    \u0027.github/workflows/main.yml\u0027, \u0027.env.example\u0027\n  ];\n\n  const blobByPath = new Map();\n  for (const b of allBlobs) blobByPath.set(String(b.path), b);\n\n  const selectedPaths = [];\n  const addPath = (p) =\u003e {\n    if (!p || selectedPaths.includes(p) || isExcluded(p)) return;\n    selectedPaths.push(p);\n  };\n\n  for (const p of priorityPaths) {\n    if (blobByPath.has(p)) addPath(p);\n  }\n\n  const maxRepoFiles = Math.max(5, Number(env.MAX_REPO_FILES || 20));\n  const candidates = allBlobs\n    .map((b) =\u003e ({ path: String(b.path), size: Number(b.size || 0) }))\n    .filter((b) =\u003e !isExcluded(b.path) \u0026\u0026 hasAllowedType(b.path))\n    .sort((a, b) =\u003e a.path.length - b.path.length || a.size - b.size);\n\n  for (const c of candidates) {\n    if (selectedPaths.length \u003e= maxRepoFiles) break;\n    addPath(c.path);\n  }\n\n  const maxRepoChars = Math.max(4000, Number(env.MAX_REPO_CHARS || 24000));\n  const maxFileChars = Math.max(500, Number(env.MAX_REPO_FILE_CHARS || 4000));\n  let usedChars = 0;\n  const fileSnapshots = [];\n  const unavailableFiles = [];\n  const truncatedFiles = [];\n\n  for (const path of selectedPaths) {\n    if (usedChars \u003e= maxRepoChars) {\n      truncatedFiles.push(path);\n      continue;\n    }\n\n    try {\n      const fileData = await requestWithRetry({\n        method: \u0027GET\u0027,\n        url: `https://api.github.com/repos/${input.owner}/${input.repo}/contents/${encodePath(path)}?ref=${encodeURIComponent(branch)}`,\n        headers: ghHeaders,\n        json: true,\n        timeout: timeoutMs,\n      }, `Get file content ${path}`);\n\n      if (!fileData || fileData.type !== \u0027file\u0027 || fileData.encoding !== \u0027base64\u0027 || typeof fileData.content !== \u0027string\u0027) {\n        unavailableFiles.push(path);\n        continue;\n      }\n\n      let text = \u0027\u0027;\n      try {\n        text = decodeBase64(fileData.content);\n      } catch {\n        unavailableFiles.push(path);\n        continue;\n      }\n\n      if (!text || /\\x00/.test(text)) {\n        unavailableFiles.push(path);\n        continue;\n      }\n\n      const remaining = Math.max(0, maxRepoChars - usedChars);\n      const fileBudget = Math.min(maxFileChars, remaining);\n      let excerpt = text;\n      let coverage = \u0027full\u0027;\n      if (text.length \u003e fileBudget) {\n        excerpt = text.slice(0, fileBudget);\n        coverage = \u0027truncated\u0027;\n        truncatedFiles.push(path);\n      }\n\n      usedChars += excerpt.length;\n      fileSnapshots.push({\n        path,\n        size: Number(fileData.size || 0),\n        excerpt,\n        coverage,\n      });\n    } catch {\n      unavailableFiles.push(path);\n    }\n  }\n\n  let recentCommits = [];\n  try {\n    recentCommits = await requestWithRetry({\n      method: \u0027GET\u0027,\n      url: `https://api.github.com/repos/${input.owner}/${input.repo}/commits?sha=${encodeURIComponent(branch)}\u0026per_page=5`,\n      headers: ghHeaders,\n      json: true,\n      timeout: timeoutMs,\n    }, \u0027Get recent commits\u0027);\n  } catch {\n    recentCommits = [];\n  }\n\n  const commitSummaries = (Array.isArray(recentCommits) ? recentCommits : []).map((c) =\u003e ({\n    sha: clean(c?.sha).slice(0, 12),\n    author: clean(c?.commit?.author?.name),\n    message: clean(c?.commit?.message).split(\u0027\\n\u0027)[0],\n  })).filter((x) =\u003e x.sha \u0026\u0026 x.message);\n\n  const secretRegex = /(AKIA[0-9A-Z]{16}|-----BEGIN (?:RSA|EC|DSA|OPENSSH) PRIVATE KEY-----|api[_-]?key\\s*[:=]\\s*[\u0027\"][^\u0027\"]{8,}|secret\\s*[:=]\\s*[\u0027\"][^\u0027\"]{8,}|password\\s*[:=]\\s*[\u0027\"][^\u0027\"]{6,}|xox[baprs]-[A-Za-z0-9-]{10,}|ghp_[A-Za-z0-9]{20,}|AIza[0-9A-Za-z\\-_]{35})/i;\n  const suspectedSecretExposure = fileSnapshots.some((f) =\u003e secretRegex.test(f.excerpt));\n\n  const reviewContext = {\n    repository: {\n      owner: input.owner,\n      repo: input.repo,\n      full_name: repo.full_name || repoIdentifier,\n      description: repo.description || \u0027\u0027,\n      default_branch: repo.default_branch || branch,\n      branch,\n      url: repo.html_url || `https://github.com/${input.owner}/${input.repo}`,\n      visibility: repo.private ? \u0027private\u0027 : \u0027public\u0027,\n      stars: Number(repo.stargazers_count || 0),\n      forks: Number(repo.forks_count || 0),\n      open_issues: Number(repo.open_issues_count || 0),\n      pushed_at: repo.pushed_at || \u0027\u0027,\n      topics: Array.isArray(repo.topics) ? repo.topics : [],\n      languages,\n      head_commit: commitSha,\n      recent_commits: commitSummaries,\n    },\n    files: {\n      total_blob_count: allBlobs.length,\n      selected_paths: selectedPaths,\n      sampled_files: fileSnapshots.map((f) =\u003e ({\n        path: f.path,\n        size: f.size,\n        coverage: f.coverage,\n        excerpt: f.excerpt,\n      })),\n      unavailable_files: unavailableFiles,\n      truncated_files: truncatedFiles,\n      limits: {\n        max_repo_files: maxRepoFiles,\n        max_repo_chars: maxRepoChars,\n        max_file_chars: maxFileChars,\n        included_chars: usedChars,\n      },\n      tree_truncated: Boolean(treeResp?.truncated),\n    },\n    limitations: {\n      sampled_file_count: fileSnapshots.length,\n      unavailable_file_count: unavailableFiles.length,\n      truncated_file_count: truncatedFiles.length,\n      limited_coverage: Boolean(treeResp?.truncated) || unavailableFiles.length \u003e 0 || truncatedFiles.length \u003e 0 || fileSnapshots.length === 0,\n    },\n    security_signals: {\n      suspected_secret_exposure: suspectedSecretExposure,\n    },\n  };\n\n  const schema = {\n    type: \u0027object\u0027,\n    additionalProperties: false,\n    required: [\u0027summary\u0027,\u0027risk\u0027,\u0027risk_reasoning\u0027,\u0027architecture_observations\u0027,\u0027code_quality_findings\u0027,\u0027security_findings\u0027,\u0027test_coverage_gaps\u0027,\u0027recommended_next_steps\u0027,\u0027questions_for_maintainer\u0027],\n    properties: {\n      summary: { type: \u0027string\u0027 },\n      risk: { type: \u0027string\u0027, enum: [\u0027low\u0027,\u0027medium\u0027,\u0027high\u0027] },\n      risk_reasoning: { type: \u0027array\u0027, items: { type: \u0027string\u0027 } },\n      architecture_observations: { type: \u0027array\u0027, items: { type: \u0027string\u0027 } },\n      code_quality_findings: { type: \u0027array\u0027, items: { type: \u0027string\u0027 } },\n      security_findings: { type: \u0027array\u0027, items: { type: \u0027string\u0027 } },\n      test_coverage_gaps: { type: \u0027array\u0027, items: { type: \u0027string\u0027 } },\n      recommended_next_steps: { type: \u0027array\u0027, items: { type: \u0027string\u0027 } },\n      questions_for_maintainer: { type: \u0027array\u0027, items: { type: \u0027string\u0027 } },\n    },\n  };\n\n  const aiResp = await requestWithRetry({\n    method: \u0027POST\u0027,\n    url: \u0027https://api.openai.com/v1/chat/completions\u0027,\n    headers: {\n      Authorization: `Bearer ${openaiKey}`,\n      \u0027Content-Type\u0027: \u0027application/json\u0027,\n    },\n    body: {\n      model: clean(env.OPENAI_MODEL) || \u0027gpt-4.1-mini\u0027,\n      temperature: 0.1,\n      messages: [\n        { role: \u0027system\u0027, content: [\n          \u0027You are a senior software reviewer producing a repository review packet.\u0027,\n          \u0027Use ONLY the provided repository metadata, commit summaries, and sampled file excerpts.\u0027,\n          \u0027Do not hallucinate unseen files or implementation details.\u0027,\n          \u0027If coverage is limited, explicitly state reduced confidence and what is missing.\u0027,\n          \u0027Focus on architecture, maintainability, security, and testing gaps.\u0027,\n          \u0027Return strict JSON with exactly these keys: summary, risk, risk_reasoning, architecture_observations, code_quality_findings, security_findings, test_coverage_gaps, recommended_next_steps, questions_for_maintainer.\u0027\n        ].join(\u0027\\n\u0027) },\n        { role: \u0027user\u0027, content: `Repository context JSON:\\n${JSON.stringify(reviewContext)}` },\n      ],\n      response_format: {\n        type: \u0027json_schema\u0027,\n        json_schema: { name: \u0027repo_review_packet\u0027, strict: true, schema },\n      },\n    },\n    json: true,\n    timeout: Math.max(2000, Number(env.OPENAI_TIMEOUT_MS || 60000)),\n  }, \u0027Generate repository review packet\u0027);\n\n  const content = aiResp?.choices?.[0]?.message?.content;\n  let parsed = {};\n  if (typeof content === \u0027string\u0027) parsed = JSON.parse(content);\n  else if (content \u0026\u0026 typeof content === \u0027object\u0027) parsed = content;\n\n  const packet = {\n    summary: clean(parsed.summary) || \u0027Automated review could not produce a confident repository summary from available data.\u0027,\n    risk: ensureRisk(parsed.risk),\n    risk_reasoning: asList(parsed.risk_reasoning, 8),\n    architecture_observations: asList(parsed.architecture_observations, 8),\n    code_quality_findings: asList(parsed.code_quality_findings, 10),\n    security_findings: asList(parsed.security_findings, 10),\n    test_coverage_gaps: asList(parsed.test_coverage_gaps, 10),\n    recommended_next_steps: asList(parsed.recommended_next_steps, 10),\n    questions_for_maintainer: asList(parsed.questions_for_maintainer, 8),\n  };\n\n  if (reviewContext.limitations.limited_coverage) {\n    if (packet.risk === \u0027low\u0027) packet.risk = \u0027medium\u0027;\n    addUnique(packet.risk_reasoning, `Review coverage is limited: sampled ${reviewContext.limitations.sampled_file_count} file(s), ${reviewContext.limitations.unavailable_file_count} unavailable, ${reviewContext.limitations.truncated_file_count} truncated.`);\n    addUnique(packet.questions_for_maintainer, \u0027Can you share additional core files/modules for deeper review coverage?\u0027);\n  }\n\n  if (suspectedSecretExposure) {\n    packet.risk = \u0027high\u0027;\n    addUnique(packet.security_findings, \u0027Potential secret/token/private key exposure detected in sampled repository content.\u0027);\n    addUnique(packet.recommended_next_steps, \u0027Remove exposed secret material from repository content and configuration files.\u0027);\n    addUnique(packet.recommended_next_steps, \u0027Rotate compromised credentials and purge from git history if committed.\u0027);\n  }\n\n  if (packet.risk === \u0027high\u0027) {\n    addUnique(packet.recommended_next_steps, \u0027Require explicit human security review before production deployment.\u0027);\n    addUnique(packet.test_coverage_gaps, \u0027Add regression and security tests for critical code paths before release.\u0027);\n  }\n\n  const bullet = (arr) =\u003e (arr.length ? arr.map((x) =\u003e `- ${x}`).join(\u0027\\n\u0027) : \u0027- None.\u0027);\n  let message = [\n    `Repository Review Packet for ${repoIdentifier}`,\n    `Branch: ${branch}`,\n    `Head: ${commitSha}`,\n    \u0027\u0027,\n    \u00271) Summary\u0027,\n    packet.summary,\n    \u0027\u0027,\n    \u00272) Risk + reasoning\u0027,\n    `Risk: ${packet.risk.toUpperCase()}`,\n    bullet(packet.risk_reasoning),\n    \u0027\u0027,\n    \u00273) Architecture observations\u0027,\n    bullet(packet.architecture_observations),\n    \u0027\u0027,\n    \u00274) Code quality findings\u0027,\n    bullet(packet.code_quality_findings),\n    \u0027\u0027,\n    \u00275) Security findings\u0027,\n    bullet(packet.security_findings),\n    \u0027\u0027,\n    \u00276) Test coverage gaps\u0027,\n    bullet(packet.test_coverage_gaps),\n    \u0027\u0027,\n    \u00277) Recommended next steps\u0027,\n    bullet(packet.recommended_next_steps),\n    \u0027\u0027,\n    \u00278) Questions for maintainer\u0027,\n    bullet(packet.questions_for_maintainer),\n  ].join(\u0027\\n\u0027);\n\n  if (packet.risk === \u0027high\u0027) {\n    message += \u0027\\n\\nHigh-Risk Guidance:\\n- Human review is strongly required before release.\\n- Validate rollback/testing steps before deployment.\\n- Do not ship based only on this automated packet.\u0027;\n  }\n\n  \n  let postResp = {};\n  let messageLink = \u0027\u0027;\n\n  if (destination === \u0027slack\u0027) {\n    postResp = await requestWithRetry({\n      method: \u0027POST\u0027,\n      url: slackWebhook,\n      headers: { \u0027Content-Type\u0027: \u0027application/json\u0027 },\n      body: { text: message },\n      json: true,\n      timeout: timeoutMs,\n    }, \u0027Post Slack message\u0027);\n  } else {\n    const discordUrl = discordWebhook.includes(\u0027?\u0027) ? `${discordWebhook}\u0026wait=true` : `${discordWebhook}?wait=true`;\n\n    const splitForDiscord = (text, maxLen = 1900) =\u003e {\n      const lines = String(text || \u0027\u0027).split(\u0027\\n\u0027);\n      const chunks = [];\n      let current = \u0027\u0027;\n\n      for (const line of lines) {\n        const next = current ? `${current}\\n${line}` : line;\n        if (next.length \u003c= maxLen) {\n          current = next;\n          continue;\n        }\n\n        if (current) chunks.push(current);\n\n        if (line.length \u003c= maxLen) {\n          current = line;\n          continue;\n        }\n\n        let remaining = line;\n        while (remaining.length \u003e maxLen) {\n          chunks.push(remaining.slice(0, maxLen));\n          remaining = remaining.slice(maxLen);\n        }\n        current = remaining;\n      }\n\n      if (current) chunks.push(current);\n      return chunks.length ? chunks : [\u0027(empty message)\u0027];\n    };\n\n    const discordChunks = splitForDiscord(message, 1900);\n    let firstResp = null;\n\n    for (let i = 0; i \u003c discordChunks.length; i++) {\n      const resp = await requestWithRetry({\n        method: \u0027POST\u0027,\n        url: discordUrl,\n        headers: { \u0027Content-Type\u0027: \u0027application/json\u0027 },\n        body: { content: discordChunks[i] },\n        json: true,\n        timeout: timeoutMs,\n      }, `Post Discord message chunk ${i + 1}`);\n\n      if (!firstResp) firstResp = resp;\n    }\n\n    postResp = firstResp || {};\n\n    if (postResp?.id \u0026\u0026 postResp?.channel_id \u0026\u0026 postResp?.guild_id) {\n      messageLink = `https://discord.com/channels/${postResp.guild_id}/${postResp.channel_id}/${postResp.id}`;\n    }\n  }\n\n  staticData.lastReviewedByRepo[dedupeKey] = commitSha;\n  const auditEntry = audit(packet.risk, messageLink);\n\n  return [{\n    json: {\n      reviewed_at: nowIso(),\n      trigger_mode: input.trigger_mode,\n      event_action: input.event_action,\n      repo_identifier: repoIdentifier,\n      branch,\n      commit_sha: commitSha,\n      review_packet: packet,\n      formatted_message: message,\n      destination,\n      message_link: messageLink,\n      audit_entry: auditEntry,\n      limitations: reviewContext.limitations,\n      post_response_preview: postResp?.ok ?? postResp?.id ?? null,\n    },\n  }];\n} catch (error) {\n  audit(\u0027error\u0027, \u0027\u0027, error.message);\n  throw new Error(`Repository review workflow failed for ${repoIdentifier}: ${error.message}. Check credentials, rate limits, webhook payload, and repository access.`);\n}"
+                                     }
+                  },
+                  {
+                      "id":  "node-log-skipped",
+                      "name":  "Log Skipped Event",
+                      "type":  "n8n-nodes-base.code",
+                      "typeVersion":  2,
+                      "position":  [
+                                       -20,
+                                       20
+                                   ],
+                      "parameters":  {
+                                         "language":  "javaScript",
+                                         "mode":  "runOnceForAllItems",
+                                         "jsCode":  "const item = $input.first().json;\nconst staticData = $getWorkflowStaticData(\u0027global\u0027);\nif (!Array.isArray(staticData.auditLog)) staticData.auditLog = [];\n\nconst entry = {\n  timestamp: new Date().toISOString(),\n  pr_identifier: item.pr_identifier || \u0027unknown\u0027,\n  commit_sha: item.reviewed_sha || \u0027unknown\u0027,\n  risk_level: \u0027ignored_event\u0027,\n  message_link: \u0027\u0027,\n  note: item.skip_reason || \u0027Event ignored before review.\u0027,\n};\n\nstaticData.auditLog.unshift(entry);\nstaticData.auditLog = staticData.auditLog.slice(0, 500);\n\nreturn [{ json: { skipped: true, reason: item.skip_reason || \u0027Event ignored.\u0027, audit_entry: entry } }];"
+                                     }
+                  }
+              ],
+    "connections":  {
+                        "Webhook Auto":  {
+                                             "main":  [
+                                                          [
+                                                              {
+                                                                  "node":  "Normalize Input",
+                                                                  "type":  "main",
+                                                                  "index":  0
+                                                              }
+                                                          ]
+                                                      ]
+                                         },
+                        "Webhook Manual":  {
+                                               "main":  [
+                                                            [
+                                                                {
+                                                                    "node":  "Normalize Input",
+                                                                    "type":  "main",
+                                                                    "index":  0
+                                                                }
+                                                            ]
+                                                        ]
+                                           },
+                        "Normalize Input":  {
+                                                "main":  [
+                                                             [
+                                                                 {
+                                                                     "node":  "Should Process Event",
+                                                                     "type":  "main",
+                                                                     "index":  0
+                                                                 }
+                                                             ]
+                                                         ]
+                                            },
+                        "Should Process Event":  {
+                                                     "main":  [
+                                                                  [
+                                                                      {
+                                                                          "node":  "PR Review + Notify",
+                                                                          "type":  "main",
+                                                                          "index":  0
+                                                                      }
+                                                                  ],
+                                                                  [
+                                                                      {
+                                                                          "node":  "Log Skipped Event",
+                                                                          "type":  "main",
+                                                                          "index":  0
+                                                                      }
+                                                                  ]
+                                                              ]
+                                                 }
+                    },
+    "settings":  {
+                     "executionOrder":  "v1",
+                     "saveDataErrorExecution":  "all",
+                     "saveDataSuccessExecution":  "all",
+                     "saveExecutionProgress":  true,
+                     "callerPolicy":  "workflowsFromSameOwner",
+                     "availableInMCP":  false
+                 },
+    "staticData":  {
+                       "global":  {
+                                      "lastReviewedByPr":  {
+                                                               "octocat/Hello-World#1":  "7044a8a032e85b6ab611033b2ac8af7ce85805b2"
+                                                           },
+                                      "auditLog":  [
+                                                       {
+                                                           "timestamp":  "2026-03-02T02:41:01.659Z",
+                                                           "repo_identifier":  "sai-shashankN/SupplyMate",
+                                                           "commit_sha":  "124cc25a27a6dd5004d72f00b1cb5d720c5fed79",
+                                                           "risk_level":  "medium",
+                                                           "message_link":  ""
+                                                       },
+                                                       {
+                                                           "timestamp":  "2026-03-02T02:40:28.625Z",
+                                                           "repo_identifier":  "sai-shashankN/SupplyMate",
+                                                           "commit_sha":  "124cc25a27a6dd5004d72f00b1cb5d720c5fed79",
+                                                           "risk_level":  "medium",
+                                                           "message_link":  ""
+                                                       },
+                                                       {
+                                                           "timestamp":  "2026-03-02T02:30:33.128Z",
+                                                           "repo_identifier":  "sai-shashankN/SupplyMate",
+                                                           "commit_sha":  "124cc25a27a6dd5004d72f00b1cb5d720c5fed79",
+                                                           "risk_level":  "duplicate_skip",
+                                                           "message_link":  "",
+                                                           "note":  "Same commit already reviewed; skipped to prevent spam."
+                                                       },
+                                                       {
+                                                           "timestamp":  "2026-03-02T02:27:11.982Z",
+                                                           "repo_identifier":  "sai-shashankN/SupplyMate",
+                                                           "commit_sha":  "124cc25a27a6dd5004d72f00b1cb5d720c5fed79",
+                                                           "risk_level":  "medium",
+                                                           "message_link":  ""
+                                                       },
+                                                       {
+                                                           "timestamp":  "2026-03-02T02:17:24.290Z",
+                                                           "pr_identifier":  "unknown",
+                                                           "commit_sha":  "unknown",
+                                                           "risk_level":  "ignored_event",
+                                                           "message_link":  "",
+                                                           "note":  "Manual mode requires a valid GitHub PR URL in body.pr_url, e.g. https://github.com/owner/repo/pull/123"
+                                                       },
+                                                       {
+                                                           "timestamp":  "2026-03-02T02:17:04.872Z",
+                                                           "pr_identifier":  "unknown",
+                                                           "commit_sha":  "unknown",
+                                                           "risk_level":  "ignored_event",
+                                                           "message_link":  "",
+                                                           "note":  "Manual mode requires a valid GitHub PR URL in body.pr_url, e.g. https://github.com/owner/repo/pull/123"
+                                                       },
+                                                       {
+                                                           "timestamp":  "2026-03-02T02:08:08.585Z",
+                                                           "pr_identifier":  "octocat/Hello-World#1",
+                                                           "commit_sha":  "7044a8a032e85b6ab611033b2ac8af7ce85805b2",
+                                                           "risk_level":  "duplicate_skip",
+                                                           "message_link":  "",
+                                                           "note":  "Same commit already reviewed; skipped to prevent spam."
+                                                       },
+                                                       {
+                                                           "timestamp":  "2026-03-02T02:01:59.268Z",
+                                                           "pr_identifier":  "octocat/Hello-World#1",
+                                                           "commit_sha":  "7044a8a032e85b6ab611033b2ac8af7ce85805b2",
+                                                           "risk_level":  "duplicate_skip",
+                                                           "message_link":  "",
+                                                           "note":  "Same commit already reviewed; skipped to prevent spam."
+                                                       },
+                                                       {
+                                                           "timestamp":  "2026-03-02T02:01:55.128Z",
+                                                           "pr_identifier":  "octocat/Hello-World#1",
+                                                           "commit_sha":  "7044a8a032e85b6ab611033b2ac8af7ce85805b2",
+                                                           "risk_level":  "low",
+                                                           "message_link":  ""
+                                                       },
+                                                       {
+                                                           "timestamp":  "2026-03-02T01:54:14.308Z",
+                                                           "pr_identifier":  "octocat/Hello-World#1",
+                                                           "commit_sha":  "unknown",
+                                                           "risk_level":  "error",
+                                                           "message_link":  "",
+                                                           "note":  "Get PR metadata failed after 3 attempt(s). Status=n/a. fetch is not defined"
+                                                       },
+                                                       {
+                                                           "timestamp":  "2026-03-02T01:54:09.286Z",
+                                                           "pr_identifier":  "octocat/Hello-World#1",
+                                                           "commit_sha":  "unknown",
+                                                           "risk_level":  "error",
+                                                           "message_link":  "",
+                                                           "note":  "Get PR metadata failed after 3 attempt(s). Status=n/a. fetch is not defined"
+                                                       },
+                                                       {
+                                                           "timestamp":  "2026-03-02T01:52:36.507Z",
+                                                           "pr_identifier":  "octocat/Hello-World#1",
+                                                           "commit_sha":  "unknown",
+                                                           "risk_level":  "error",
+                                                           "message_link":  "",
+                                                           "note":  "Get PR metadata failed after 3 attempt(s). Status=n/a. $helpers is not defined"
+                                                       },
+                                                       {
+                                                           "timestamp":  "2026-03-02T01:52:31.472Z",
+                                                           "pr_identifier":  "octocat/Hello-World#1",
+                                                           "commit_sha":  "unknown",
+                                                           "risk_level":  "error",
+                                                           "message_link":  "",
+                                                           "note":  "Get PR metadata failed after 3 attempt(s). Status=n/a. $helpers is not defined"
+                                                       },
+                                                       {
+                                                           "timestamp":  "2026-03-02T01:52:24.607Z",
+                                                           "pr_identifier":  "octocat/Hello-World#1",
+                                                           "commit_sha":  "unknown",
+                                                           "risk_level":  "error",
+                                                           "message_link":  "",
+                                                           "note":  "Get PR metadata failed after 3 attempt(s). Status=n/a. $helpers is not defined"
+                                                       },
+                                                       {
+                                                           "timestamp":  "2026-03-02T01:52:19.570Z",
+                                                           "pr_identifier":  "octocat/Hello-World#1",
+                                                           "commit_sha":  "unknown",
+                                                           "risk_level":  "error",
+                                                           "message_link":  "",
+                                                           "note":  "Get PR metadata failed after 3 attempt(s). Status=n/a. $helpers is not defined"
+                                                       },
+                                                       {
+                                                           "timestamp":  "2026-03-02T01:50:11.021Z",
+                                                           "pr_identifier":  "octocat/Hello-World#1",
+                                                           "commit_sha":  "unknown",
+                                                           "risk_level":  "error",
+                                                           "message_link":  "",
+                                                           "note":  "Missing required env var GITHUB_TOKEN"
+                                                       },
+                                                       {
+                                                           "timestamp":  "2026-03-02T01:50:08.991Z",
+                                                           "pr_identifier":  "octocat/Hello-World#1",
+                                                           "commit_sha":  "unknown",
+                                                           "risk_level":  "error",
+                                                           "message_link":  "",
+                                                           "note":  "Missing required env var GITHUB_TOKEN"
+                                                       },
+                                                       {
+                                                           "timestamp":  "2026-03-02T01:45:46.857Z",
+                                                           "pr_identifier":  "octocat/Hello-World#1",
+                                                           "commit_sha":  "unknown",
+                                                           "risk_level":  "error",
+                                                           "message_link":  "",
+                                                           "note":  "Missing required env var GITHUB_TOKEN"
+                                                       },
+                                                       {
+                                                           "timestamp":  "2026-03-02T01:45:44.823Z",
+                                                           "pr_identifier":  "octocat/Hello-World#1",
+                                                           "commit_sha":  "unknown",
+                                                           "risk_level":  "error",
+                                                           "message_link":  "",
+                                                           "note":  "Missing required env var GITHUB_TOKEN"
+                                                       }
+                                                   ],
+                                      "lastReviewedByRepo":  {
+                                                                 "sai-shashankN/SupplyMate@main":  "124cc25a27a6dd5004d72f00b1cb5d720c5fed79"
+                                                             }
+                                  }
+                   },
+    "meta":  null,
+    "pinData":  null,
+    "versionId":  "bf49a2c6-bb03-4782-8a8f-a26c780cadf3",
+    "activeVersionId":  "bf49a2c6-bb03-4782-8a8f-a26c780cadf3",
+    "versionCounter":  39,
+    "triggerCount":  2,
+    "tags":  [
+
+             ],
+    "shared":  [
+                   {
+                       "updatedAt":  "2026-03-02T01:43:37.355Z",
+                       "createdAt":  "2026-03-02T01:43:37.355Z",
+                       "role":  "workflow:owner",
+                       "workflowId":  "DJXtUlHws7xs3tOA",
+                       "projectId":  "tCY3gjSHOHmRmHkJ",
+                       "project":  {
+                                       "updatedAt":  "2025-12-08T11:07:43.324Z",
+                                       "createdAt":  "2025-12-08T10:51:25.828Z",
+                                       "id":  "tCY3gjSHOHmRmHkJ",
+                                       "name":  "Sai Shashank Narang \u003csaishashanknarang@gmail.com\u003e",
+                                       "type":  "personal",
+                                       "icon":  null,
+                                       "description":  null
+                                   }
+                   }
+               ]
+}
